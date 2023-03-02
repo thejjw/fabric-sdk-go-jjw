@@ -32,5 +32,3 @@ require (
 )
 
 go 1.14
-
-replace github.com/hyperledger/fabric-sdk-go => github.com/thejjw/fabric-sdk-go-jjw v1.0.0

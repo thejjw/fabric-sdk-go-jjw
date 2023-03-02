@@ -159,9 +159,38 @@ func (txn *Transaction) Submit(args ...string) ([]byte, error) {
 	return response.Payload, nil
 }
 
+// custom submit() function
+func (txn *Transaction) SubmitByBytes(arg [][]byte) ([]byte, error) {
+	txn.request.Args = arg
+	txn.request.IsInit = txn.isInit
+
+	var options []channel.RequestOption
+	if txn.endorsingPeers != nil {
+		options = append(options, channel.WithTargetEndpoints(txn.endorsingPeers...))
+	}
+	options = append(options, channel.WithTimeout(fab.Execute, txn.contract.network.gateway.options.Timeout))
+	options = append(options, channel.WithRetry(retry.DefaultChannelOpts))
+
+	if txn.collections != nil {
+		txn.request.InvocationChain = append(txn.request.InvocationChain, &fab.ChaincodeCall{ID: txn.contract.chaincodeID, Collections: txn.collections})
+	}
+
+	response, err := txn.contract.client.InvokeHandler(
+		newSubmitHandler(txn.eventch),
+		*txn.request,
+		options...,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to submit")
+	}
+
+	return response.Payload, nil
+}
+
 // RegisterCommitEvent registers for a commit event for this transaction.
-//  Returns:
-//  the channel that is used to receive the event. The channel is closed after the event is queued.
+//
+//	Returns:
+//	the channel that is used to receive the event. The channel is closed after the event is queued.
 func (txn *Transaction) RegisterCommitEvent() <-chan *fab.TxStatusEvent {
 	txn.eventch = make(chan *fab.TxStatusEvent, 1)
 	return txn.eventch
@@ -179,7 +208,7 @@ type commitTxHandler struct {
 	eventch chan *fab.TxStatusEvent
 }
 
-//Handle handles commit tx
+// Handle handles commit tx
 func (c *commitTxHandler) Handle(requestContext *invoke.RequestContext, clientContext *invoke.ClientContext) {
 	txnID := requestContext.Response.TransactionID
 
